@@ -2,6 +2,7 @@ import numpy as np
 import random
 import game
 
+
 def print_INFO():
     """
     Prints your homework submission details.
@@ -36,7 +37,7 @@ def minimax(grid, depth, maximizingPlayer, dep=4):
     if depth==0 or grid.terminate():
       return get_heuristic(grid) , set()
     
-    move = grid.valid()
+    move = grid.valid
     
     if not move:
       return 0, set()
@@ -47,23 +48,23 @@ def minimax(grid, depth, maximizingPlayer, dep=4):
     if maximizingPlayer:
       value=float('-inf')
       for col in move:
-        next=grid.drop_piece(grid, col)
-        next_value, _ = minimax(grid, depth-1, False, dep)
-        if next_value>max:
+        next=game.drop_piece(grid, col)
+        next_value, _ = minimax(next, depth-1, False, dep)
+        if next_value>value:
           value=next_value
           candidate={col}
-        elif next_value==max:
+        elif next_value==value:
           candidate.add(col)
           
     else:
       value=float('inf')
       for col in move:
-        next=grid.drop_piece(grid, col)
-        next_value, _= minimax(grid, depth-1, True, dep)
-        if next_value<min:
+        next=game.drop_piece(grid, col)
+        next_value, _= minimax(next, depth-1, True, dep)
+        if next_value<value:
           candidate={col}
           value=next_value
-        elif next_value==min:
+        elif next_value==value:
           candidate.add(col)
     
     return value, candidate
@@ -83,38 +84,46 @@ def alphabeta(grid, depth, maximizingPlayer, alpha, beta, dep=4):
     """
     # Placeholder return to keep function structure intact
     if depth==0 or grid.terminate():
-        return get_heuristic(grid) , set()
-      
-    move = grid.valid()
-      
+      return get_heuristic(grid) , set()
+    
+    move = grid.valid
+    
     if not move:
       return 0, set()
-      
+    
     candidate=set()
     value=0
-      
+    
     if maximizingPlayer:
       value=float('-inf')
       for col in move:
-        next=grid.drop_piece(grid, col)
-        next_value, _ = minimax(grid, depth-1, False, dep)
-        if next_value>max:
+        next=game.drop_piece(grid, col)
+        next_value, _ = alphabeta(next, depth-1, False, alpha, beta, dep)
+        if next_value>value:
           value=next_value
           candidate={col}
-        elif next_value==max:
+        elif next_value==value:
           candidate.add(col)
+        if value>alpha:
+          alpha=value
+        if beta<=alpha:
+          break
           
     else:
       value=float('inf')
       for col in move:
-        next=grid.drop_piece(grid, col)
-        next_value, _= minimax(grid, depth-1, True, dep)
-        if next_value<min:
+        next=game.drop_piece(grid, col)
+        next_value, _= alphabeta(next, depth-1, True, alpha, beta, dep)
+        if next_value<value:
           candidate={col}
           value=next_value
-        elif next_value==min:
+        elif next_value==value:
           candidate.add(col)
-
+        if value<beta:
+          beta=value
+        if beta<=alpha:
+          break
+          
     return value, candidate
 
 #
@@ -155,12 +164,15 @@ def agent_strong(grid):
     This agent will typically act as Player 2.
     """
     # Placeholder logic that calls your_function().
-    return random.choice(list(your_function(grid, 4, False, -np.inf, np.inf)[1]))
+    
+    return random.choice(list(your_function(grid, 4, True, -np.inf, np.inf)[1]))
 
 
 #
 # Heuristic functions
 #
+
+
 
 def get_heuristic(board):
     """
@@ -192,8 +204,101 @@ def get_heuristic_strong(board):
     TODO (Part 3): Implement a more advanced board evaluation for agent_strong.
     Currently a placeholder that returns 0.
     """
-    return 0  # Placeholder
+    now=board.mark
+    opponent=3-board.mark
 
+    #we win
+    if board.win(now):
+      return 1e10
+    #opponent win
+    if board.win(opponent):
+      return -1e10
+    
+    score=0
+
+    #check for forced win
+    for col in board.valid:
+      if game.check_winning_move(board, col, now):
+        score+=1e9
+      
+      if game.check_winning_move(board, col, opponent):
+        score-=1e9
+
+    #center control strategy
+    center=board.column//2
+    cen_weight=3.0
+
+    #weight the cols
+    for col in range(board.column):
+      array=[board.table[row][col] for row in range(board.row)]
+      weight=cen_weight-abs(col-center)*0.5
+      score+=weight*array.count(now)
+      #weight * 我們的棋子數
+      score-=weight*array.count(opponent)
+      
+
+    patterns={
+      #[當前玩家的棋子數量, empty num, value]
+      'two':[2,2,5],
+      'three':[3,1,50],
+      'opp_two':[0,2,-4],
+      'opp_three':[0,1,-40]
+    }
+
+    #evaluate patterns
+    score += evaluate_pattern(board, now, opponent, patterns)
+    #detect multiple winning threats
+    score +=1000* double_threats(board, now)
+    score -= 1200* double_threats(board, opponent)
+
+    return score
+    
+def evaluate_pattern(board, player, opponent, patterns):
+    score=0
+    directions=[
+      (1,0),
+      (0,1),
+      (1,1),
+      (1,-1)
+    ]
+
+    for x,y in directions:
+      for r in range(board.row):
+        for c in range(board.column):
+          if(r+3*x>=board.row or r+3*x<0 or c+3*y>=board.column or c+3*y<0):
+            continue
+
+          window=[]
+          for i in range (4):
+            window.append(board.table[r+i*x][c+i*y])
+
+          p_count=window.count(player)
+          o_count=window.count(opponent)
+          empty=window.count(0)
+
+          if o_count==0:
+            if p_count==2 and empty==2:
+              score+=patterns['two'][2]
+            elif p_count==3 and empty==1:
+              score+=patterns['three'][2]
+          
+          if p_count==0:
+            if o_count==2 and empty==2:
+              score+= patterns['opp_two'][2]
+            elif o_count==3 and empty==1:
+              score+= patterns['opp_three'][2]
+
+    return score
+
+def double_threats(board, player):
+    # Only count immediate threats
+    winning_moves = 0
+    for col in board.valid:
+        if game.check_winning_move(board, col, player):
+            winning_moves += 1
+    
+    # If there's more than one way to win, it's a double threat
+    return 1 if winning_moves > 1 else 0
 
 def your_function(grid, depth, maximizingPlayer, alpha, beta, dep=4):
     """
@@ -205,4 +310,47 @@ def your_function(grid, depth, maximizingPlayer, alpha, beta, dep=4):
 
     Currently a placeholder returning (0, {0}).
     """
-    return 0, {0}
+    if depth==0 or grid.terminate():
+      return get_heuristic_strong(grid) , set()
+    
+    move = grid.valid
+    
+    if not move:
+      return 0, set()
+    
+    candidate=set()
+    value=0
+    
+    if maximizingPlayer:
+      value=float('-inf')
+      for col in move:
+        next=game.drop_piece(grid, col)
+        next_value, _ = your_function(next, depth-1, False, alpha, beta, dep)
+        if next_value>value:
+          value=next_value
+          candidate={col}
+        elif next_value==value:
+          candidate.add(col)
+        if value>alpha:
+          alpha=value
+        if beta<=alpha:
+          break
+          
+    else:
+      value=float('inf')
+      for col in move:
+        next=game.drop_piece(grid, col)
+        next_value, _= your_function(next, depth-1, True, alpha, beta, dep)
+        if next_value<value:
+          candidate={col}
+          value=next_value
+        elif next_value==value:
+          candidate.add(col)
+        if value<beta:
+          beta=value
+        if beta<=alpha:
+          break
+          
+    
+    return value, candidate
+

@@ -72,7 +72,7 @@ class Board:
         # The game terminates if a win is detected or if the board is full.
         if self.win(self.mark) or self.win(3 - self.mark):
             return True
-        return (self.cnt == self.row * self.column)
+        return (self.cnt > self.row * self.column)
 
     def start(self, agents):
         """
