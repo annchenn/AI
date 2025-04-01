@@ -165,7 +165,7 @@ def agent_strong(grid):
     """
     # Placeholder logic that calls your_function().
     
-    return random.choice(list(your_function(grid, 4, True, -np.inf, np.inf)[1]))
+    return random.choice(list(your_function(grid, 4, False, -np.inf, np.inf)[1]))
 
 
 #
@@ -219,86 +219,46 @@ def get_heuristic_strong(board):
     #check for forced win
     for col in board.valid:
       if game.check_winning_move(board, col, now):
-        score+=1e9
+        score+=1000000
       
       if game.check_winning_move(board, col, opponent):
-        score-=1e9
+        score-=800000
 
     #center control strategy
     center=board.column//2
-    cen_weight=3.0
 
     #weight the cols
     for col in range(board.column):
-      array=[board.table[row][col] for row in range(board.row)]
-      weight=cen_weight-abs(col-center)*0.5
-      score+=weight*array.count(now)
-      #weight * 我們的棋子數
-      score-=weight*array.count(opponent)
+      col_weight = 6 - abs(col - center)
+      for row in range(board.row):
+          if board.table[row][col] == now:
+              score += col_weight * 3
+          elif board.table[row][col] == opponent:
+              score -= col_weight * 3
+              
+    for piece_count in [2, 3]:
+      # Our pieces
+      window_count = game.count_windows(board, piece_count, now)
+      score += window_count * (100 if piece_count == 2 else 1000)
       
-
-    patterns={
-      #[當前玩家的棋子數量, empty num, value]
-      'two':[2,2,5],
-      'three':[3,1,50],
-      'opp_two':[0,2,-4],
-      'opp_three':[0,1,-40]
-    }
-
-    #evaluate patterns
-    score += evaluate_pattern(board, now, opponent, patterns)
-    #detect multiple winning threats
-    score +=1000* double_threats(board, now)
-    score -= 1200* double_threats(board, opponent)
-
-    return score
-    
-def evaluate_pattern(board, player, opponent, patterns):
-    score=0
-    directions=[
-      (1,0),
-      (0,1),
-      (1,1),
-      (1,-1)
-    ]
-
-    for x,y in directions:
-      for r in range(board.row):
-        for c in range(board.column):
-          if(r+3*x>=board.row or r+3*x<0 or c+3*y>=board.column or c+3*y<0):
-            continue
-
-          window=[]
-          for i in range (4):
-            window.append(board.table[r+i*x][c+i*y])
-
-          p_count=window.count(player)
-          o_count=window.count(opponent)
-          empty=window.count(0)
-
-          if o_count==0:
-            if p_count==2 and empty==2:
-              score+=patterns['two'][2]
-            elif p_count==3 and empty==1:
-              score+=patterns['three'][2]
-          
-          if p_count==0:
-            if o_count==2 and empty==2:
-              score+= patterns['opp_two'][2]
-            elif o_count==3 and empty==1:
-              score+= patterns['opp_three'][2]
-
-    return score
-
-def double_threats(board, player):
-    # Only count immediate threats
-    winning_moves = 0
+      # Opponent pieces
+      opp_window_count = game.count_windows(board, piece_count, opponent)
+      score -= opp_window_count * (80 if piece_count == 2 else 900)
+      
+      
+    three_in_row_cols = 0
     for col in board.valid:
-        if game.check_winning_move(board, col, player):
-            winning_moves += 1
+      next_board = game.drop_piece(board, col)
+      if game.count_windows(next_board, 3, now) > game.count_windows(board, 3, now):
+        three_in_row_cols += 1
     
-    # If there's more than one way to win, it's a double threat
-    return 1 if winning_moves > 1 else 0
+    if three_in_row_cols > 1:
+      score += 10000  # Bonus for creating multiple threats
+    
+    
+    return -score
+    
+
 
 def your_function(grid, depth, maximizingPlayer, alpha, beta, dep=4):
     """
@@ -317,6 +277,10 @@ def your_function(grid, depth, maximizingPlayer, alpha, beta, dep=4):
     
     if not move:
       return 0, set()
+    
+    center = grid.column // 2
+    # Sort columns by distance from center (center first)
+    move = sorted(move, key=lambda col: abs(col - center))
     
     candidate=set()
     value=0
