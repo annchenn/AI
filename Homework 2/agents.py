@@ -204,46 +204,67 @@ def get_heuristic_strong(board):
     TODO (Part 3): Implement a more advanced board evaluation for agent_strong.
     Currently a placeholder that returns 0.
     """
-    now=board.mark
-    opponent=3-board.mark
+    now=2
+    opponent=1
 
     #we win
     if board.win(now):
-      return 1e10
+      return -1e10
     #opponent win
     if board.win(opponent):
-      return -1e10
+      return 1e10
     
     score=0
 
-    #check for forced win
+    immediate_win = False
+    immediate_loss = False
+    
     for col in board.valid:
-      if game.check_winning_move(board, col, now):
-        score+=1000000
-      
-      if game.check_winning_move(board, col, opponent):
-        score-=800000
+        # Check if we can win in the next move
+        if game.check_winning_move(board, col, now):
+            immediate_win = True
+            score -= 1000000
+        
+        # Check if opponent can win in the next move
+        if game.check_winning_move(board, col, opponent):
+            immediate_loss = True
+            score += 1200000  # Higher penalty to prioritize blocking
+    
+    # If we have both an immediate win and loss, prioritize winning
+    if immediate_win and immediate_loss:
+        score -= 500000
+  
 
     #center control strategy
     center=board.column//2
 
+    center_score = 0
+    for row in range(board.row):
+        if board.table[row][center] == now:
+            center_score -= 7 * (row + 1)  # Higher weight for lower positions
+        elif board.table[row][center] == opponent:
+            center_score += 8 * (row + 1)  # Even higher penalty for opponent center control
+    
+    score -= center_score * 10
+
     #weight the cols
     for col in range(board.column):
       col_weight = 6 - abs(col - center)
-      for row in range(board.row):
-          if board.table[row][col] == now:
-              score += col_weight * 3
-          elif board.table[row][col] == opponent:
-              score -= col_weight * 3
+      for row in range (board.row):
+        row_weight= row +1
+        if board.table[row][col] == now:
+            score -= col_weight *row_weight* 3
+        elif board.table[row][col] == opponent:
+            score += col_weight *row_weight* 3.5
               
     for piece_count in [2, 3]:
       # Our pieces
       window_count = game.count_windows(board, piece_count, now)
-      score += window_count * (100 if piece_count == 2 else 1000)
+      score -= window_count * (80 if piece_count == 2 else 800)
       
       # Opponent pieces
       opp_window_count = game.count_windows(board, piece_count, opponent)
-      score -= opp_window_count * (80 if piece_count == 2 else 900)
+      score += opp_window_count * (100 if piece_count == 2 else 1000)
       
       
     three_in_row_cols = 0
@@ -253,10 +274,10 @@ def get_heuristic_strong(board):
         three_in_row_cols += 1
     
     if three_in_row_cols > 1:
-      score += 10000  # Bonus for creating multiple threats
+      score -= 10000  # Bonus for creating multiple threats
     
     
-    return -score
+    return score
     
 
 
